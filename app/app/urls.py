@@ -45,6 +45,3 @@ urlpatterns = [
     path('v1/', include('api.urls')),
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
 ]
-
-if 'cloud_browser' in settings.INSTALLED_APPS:
-    urlpatterns.append(path('cloud-storage/', include('cloud_browser.urls')))

@@ -17,13 +17,11 @@ import dj_database_url
 from environs import Env
 from furl import furl
 
-
 # Build paths inside the project like this: path.join(BASE_DIR, ...)
 BASE_DIR = path.dirname(path.dirname(path.abspath(__file__)))
 
 env = Env()
 env.read_env(path.join(BASE_DIR, '.env'), recurse=False)
-
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/2.0/howto/deployment/checklist/
@@ -64,10 +62,10 @@ INSTALLED_APPS = [
     'drf_yasg'
 ]
 
-CLOUD_BROWSER_APACHE_LIBCLOUD_PROVIDER = env('CLOUD_BROWSER_LIBCLOUD_PROVIDER', None)
-CLOUD_BROWSER_APACHE_LIBCLOUD_ACCOUNT = env('CLOUD_BROWSER_LIBCLOUD_ACCOUNT', None)
-CLOUD_BROWSER_APACHE_LIBCLOUD_SECRET_KEY = env('CLOUD_BROWSER_LIBCLOUD_KEY', None)
-
+##
+CLOUD_BROWSER_APACHE_LIBCLOUD_PROVIDER = env('CLOUD_BROWSER_LIBCLOUD_PROVIDER', "google_storage")
+CLOUD_BROWSER_APACHE_LIBCLOUD_ACCOUNT = env('CLOUD_BROWSER_LIBCLOUD_ACCOUNT', "361299340158-ekktltf7fgdnukbnd4suij1j5p8715u0.apps.googleusercontent.com")
+CLOUD_BROWSER_APACHE_LIBCLOUD_SECRET_KEY = env('CLOUD_BROWSER_LIBCLOUD_KEY', "9oKRRs3Xzj7Odf5hT85AH34J")
 if CLOUD_BROWSER_APACHE_LIBCLOUD_PROVIDER:
     CLOUD_BROWSER_DATASTORE = 'ApacheLibcloud'
     CLOUD_BROWSER_OBJECT_REDIRECT_URL = '/v1/cloud-upload'
@@ -201,7 +199,6 @@ DATABASES = {
     }
 }
 
-
 # Password validation
 # https://docs.djangoproject.com/en/2.0/ref/settings/#auth-password-validators
 
@@ -279,12 +276,12 @@ if DATABASES['default'].get('ENGINE') == 'django.db.backends.sqlite3':
 if DATABASES['default'].get('ENGINE') == 'django.db.backends.mysql':
     DATABASES['default'].get('OPTIONS', {}).pop('sslmode', None)
     if env('MYSQL_SSL_CA', None):
-        DATABASES['default'].setdefault('OPTIONS', {})\
+        DATABASES['default'].setdefault('OPTIONS', {}) \
             .setdefault('ssl', {}).setdefault('ca', env('MYSQL_SSL_CA', None))
 
 # default to a sensible modern driver for Azure SQL
 if DATABASES['default'].get('ENGINE') == 'sql_server.pyodbc':
-    DATABASES['default'].setdefault('OPTIONS', {})\
+    DATABASES['default'].setdefault('OPTIONS', {}) \
         .setdefault('driver', 'ODBC Driver 17 for SQL Server')
 
 # Honor the 'X-Forwarded-Proto' header for request.is_secure()
@@ -318,7 +315,6 @@ DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', 'webmaster@localhost')
 
 if not EMAIL_HOST:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-
 
 if DEBUG:
     CORS_ORIGIN_WHITELIST = (

@@ -15,9 +15,17 @@ div.columns(v-cloak="")
 
         block example-format-area
 
-        button.button.is-primary(
-          style="margin-top: 1em;"
-          type="submit"
-          v-on:click="download()"
-          v-bind:class="{'is-loading': isLoading}"
-        ) Download
+        div.field.is-grouped(style="margin-top: 1em;")
+
+          form
+            p(style="margin-bottom: 1em;")
+              | bucket:
+              input.input(type='text', name='bucket', v-model="bucket")
+              | file:
+              input.input(type='text', name='file', v-model="file_name")
+
+            button.button.is-primary(
+              style="margin-top: 1em;"
+              v-on:click="downloadToGCP()"
+              v-bind:class="{'is-loading': isLoading}"
+            ) Download To GCP

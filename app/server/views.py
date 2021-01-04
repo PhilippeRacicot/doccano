@@ -81,6 +81,9 @@ class UsersView(ProjectAdminMixin, LoginRequiredMixin, TemplateView):
 class DataUpload(ProjectAdminMixin, LoginRequiredMixin, TemplateView):
     template_name = 'admin.html'
 
+    def get(self, request, *args, **kwargs):
+        return super(DataUpload, self).get(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         project = get_object_or_404(Project, pk=self.kwargs['project_id'])
@@ -90,6 +93,9 @@ class DataUpload(ProjectAdminMixin, LoginRequiredMixin, TemplateView):
 
 class DataDownload(ProjectAdminMixin, LoginRequiredMixin, TemplateView):
     template_name = 'admin.html'
+
+    def get(self, request, *args, **kwargs):
+        return super(DataDownload, self).get(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

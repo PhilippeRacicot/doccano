@@ -1,4 +1,6 @@
 import collections
+import pathlib
+import os, tempfile
 import json
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -7,6 +9,8 @@ from django.db.utils import IntegrityError
 from django.shortcuts import get_object_or_404, redirect
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Count, F, Q
+from google.cloud import storage
+from google.oauth2 import service_account
 from libcloud.base import DriverType, get_driver
 from libcloud.storage.types import ContainerDoesNotExistError, ObjectDoesNotExistError
 from rest_framework import generics, filters, status
@@ -19,7 +23,8 @@ from rest_framework_csv.renderers import CSVRenderer
 
 from .filters import DocumentFilter
 from .models import Project, Label, Document, RoleMapping, Role
-from .permissions import IsProjectAdmin, IsAnnotatorAndReadOnly, IsAnnotator, IsAnnotationApproverAndReadOnly, IsOwnAnnotation, IsAnnotationApprover
+from .permissions import IsProjectAdmin, IsAnnotatorAndReadOnly, IsAnnotator, IsAnnotationApproverAndReadOnly, \
+    IsOwnAnnotation, IsAnnotationApprover
 from .serializers import ProjectSerializer, LabelSerializer, DocumentSerializer, UserSerializer, ApproverSerializer
 from .serializers import ProjectPolymorphicSerializer, RoleMappingSerializer, RoleSerializer
 from .utils import CSVParser, ExcelParser, JSONParser, PlainTextParser, CoNLLParser, AudioParser, iterable_to_io
@@ -28,7 +33,6 @@ from .utils import JSONPainter, CSVPainter
 
 IsInProjectReadOnlyOrAdmin = (IsAnnotatorAndReadOnly | IsAnnotationApproverAndReadOnly | IsProjectAdmin)
 IsInProjectOrAdmin = (IsAnnotator | IsAnnotationApprover | IsProjectAdmin)
-
 
 class Health(APIView):
     permission_classes = (IsAuthenticatedOrReadOnly,)
@@ -100,12 +104,11 @@ class StatisticsAPI(APIView):
 
     @staticmethod
     def _get_user_completion_data(annotation_class, annotation_filter):
-        all_annotation_objects  = annotation_class.objects.filter(annotation_filter)
+        all_annotation_objects = annotation_class.objects.filter(annotation_filter)
         set_user_data = collections.defaultdict(set)
         for ind_obj in all_annotation_objects.values('user__username', 'document__id'):
             set_user_data[ind_obj['user__username']].add(ind_obj['document__id'])
         return {i: len(set_user_data[i]) for i in set_user_data}
-
 
     def progress(self, project):
         docs = project.documents
@@ -115,7 +118,7 @@ class StatisticsAPI(APIView):
         user_data = self._get_user_completion_data(annotation_class, annotation_filter)
         if not project.collaborative_annotation:
             annotation_filter &= Q(user_id=self.request.user)
-        done = annotation_class.objects.filter(annotation_filter)\
+        done = annotation_class.objects.filter(annotation_filter) \
             .aggregate(Count('document', distinct=True))['document__count']
         remaining = total - done
         return {'total': total, 'remaining': remaining, 'user': user_data}
@@ -160,7 +163,7 @@ class LabelDetail(generics.RetrieveUpdateDestroyAPIView):
 class DocumentList(generics.ListCreateAPIView):
     serializer_class = DocumentSerializer
     filter_backends = (DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter)
-    search_fields = ('text', )
+    search_fields = ('text',)
     ordering_fields = ('created_at', 'updated_at', 'doc_annotations__updated_at',
                        'seq_annotations__updated_at', 'seq2seq_annotations__updated_at')
     filter_class = DocumentFilter
@@ -257,6 +260,67 @@ class AnnotationDetail(generics.RetrieveUpdateDestroyAPIView):
         return self.queryset
 
 
+class GCPUploadAPI(APIView):
+    parser_classes = (MultiPartParser,)
+    permission_classes = [IsAuthenticated & IsProjectAdmin]
+
+    def post(self, request, *args, **kwargs):
+        try:
+            bucket_name = request.data['bucket']
+            file_name = request.data['file']
+        except KeyError as ex:
+            raise ValidationError('query parameter {} is missing'.format(ex))
+
+        _, path = tempfile.mkstemp()
+        storage_client = storage.Client()
+        bucket = storage_client.get_bucket(bucket_name)
+        blob = bucket.blob(file_name)
+        # throw exception when file is not present
+        blob.download_to_filename(path)
+
+        with open(path, 'rb') as fl:
+            file = iterable_to_io(fl)
+
+            self.save_file(
+                user=request.user,
+                file=file,
+                file_format=request.data['format'],
+                project_id=kwargs['project_id'],
+            )
+
+        try:
+            os.remove(path)
+        except:
+            pass
+
+        return Response(status=status.HTTP_201_CREATED)
+
+    @classmethod
+    def save_file(cls, user, file, file_format, project_id):
+        project = get_object_or_404(Project, pk=project_id)
+        parser = cls.select_parser(file_format)
+        data = parser.parse(file)
+        storage = project.get_storage(data)
+        storage.save(user)
+
+    @classmethod
+    def select_parser(cls, file_format):
+        if file_format == 'plain':
+            return PlainTextParser()
+        elif file_format == 'csv':
+            return CSVParser()
+        elif file_format == 'json':
+            return JSONParser()
+        elif file_format == 'conll':
+            return CoNLLParser()
+        elif file_format == 'excel':
+            return ExcelParser()
+        elif file_format == 'audio':
+            return AudioParser()
+        else:
+            raise ValidationError('format {} is invalid.'.format(file_format))
+
+
 class TextUploadAPI(APIView):
     parser_classes = (MultiPartParser,)
     permission_classes = [IsAuthenticated & IsProjectAdmin]
@@ -300,55 +364,58 @@ class TextUploadAPI(APIView):
             raise ValidationError('format {} is invalid.'.format(file_format))
 
 
-class CloudUploadAPI(APIView):
+class GCPDownloaderAPI(APIView):
     permission_classes = TextUploadAPI.permission_classes
 
-    def get(self, request, *args, **kwargs):
+    renderer_classes = (CSVRenderer, JSONLRenderer)
+
+    def post(self, request, *args, **kwargs):
         try:
-            project_id = request.query_params['project_id']
-            file_format = request.query_params['upload_format']
-            cloud_container = request.query_params['container']
-            cloud_object = request.query_params['object']
+            bucket_name = request.data['bucket']
+            file_name = request.data['file']
+            format = request.data['format']
         except KeyError as ex:
             raise ValidationError('query parameter {} is missing'.format(ex))
 
+        project = get_object_or_404(Project, pk=self.kwargs['project_id'])
+        documents = project.documents.all()
+        painter = self.select_painter(format)
+        # json1 format prints text labels while json format prints annotations with label ids
+        # json1 format - "labels": [[0, 15, "PERSON"], ..]
+        # json format - "annotations": [{"label": 5, "start_offset": 0, "end_offset": 2, "user": 1},..]
+        if format == "json1":
+            labels = project.labels.all()
+            data = JSONPainter.paint_labels(documents, labels)
+        else:
+            data = painter.paint(documents)
+
+        tmp = tempfile.NamedTemporaryFile(mode="w+", encoding='utf8')
+
+        for i, da in enumerate(data):
+            line_data = json.dumps(da, ensure_ascii=False).encode('utf8')
+            tmp.write(line_data.decode() + "\n")
+
+        storage_client = storage.Client()
+        bucket = storage_client.get_bucket(bucket_name)
         try:
-            cloud_file = self.get_cloud_object_as_io(cloud_container, cloud_object)
-        except ContainerDoesNotExistError:
-            raise ValidationError('cloud container {} does not exist'.format(cloud_container))
-        except ObjectDoesNotExistError:
-            raise ValidationError('cloud object {} does not exist'.format(cloud_object))
+            bucket.delete_blob(file_name)
+        except:
+            pass
 
-        TextUploadAPI.save_file(
-            user=request.user,
-            file=cloud_file,
-            file_format=file_format,
-            project_id=project_id,
-        )
+        blob = bucket.blob(file_name)
+        blob.upload_from_filename(tmp.name)
 
-        next_url = request.query_params.get('next')
+        tmp.close()
 
-        if next_url == 'about:blank':
-            return Response(data='', content_type='text/plain', status=status.HTTP_201_CREATED)
+        return Response('Uploaded {files} to "{bucketName}" bucket.')
 
-        if next_url:
-            return redirect(next_url)
-
-        return Response(status=status.HTTP_201_CREATED)
-
-    @classmethod
-    def get_cloud_object_as_io(cls, container_name, object_name):
-        provider = settings.CLOUD_BROWSER_APACHE_LIBCLOUD_PROVIDER.lower()
-        account = settings.CLOUD_BROWSER_APACHE_LIBCLOUD_ACCOUNT
-        key = settings.CLOUD_BROWSER_APACHE_LIBCLOUD_SECRET_KEY
-
-        driver = get_driver(DriverType.STORAGE, provider)
-        client = driver(account, key)
-
-        cloud_container = client.get_container(container_name)
-        cloud_object = cloud_container.get_object(object_name)
-
-        return iterable_to_io(cloud_object.as_stream())
+    def select_painter(self, format):
+        if format == 'csv':
+            return CSVPainter()
+        elif format == 'json' or format == "json1":
+            return JSONPainter()
+        else:
+            raise ValidationError('format {} is invalid.'.format(format))
 
 
 class TextDownloadAPI(APIView):
@@ -378,6 +445,27 @@ class TextDownloadAPI(APIView):
             return JSONPainter()
         else:
             raise ValidationError('format {} is invalid.'.format(format))
+
+
+# class CloudDownloadAPIGCP(APIView):
+#     permission_classes = TextDownloadAPI.permission_classes
+#
+#     def download_to_gcp(self):
+#         jsonfile = u"""<HERE GOES THE CONTENT OF YOUR KEY JSON FILE.
+#                     CONSIDER THAT THERE ARE BACKSLASHES WITHIN THE PRIVATE KEY
+#                     THEREFORE USE AN EXTRA BACKSLASH. FOR INSTANCE:
+#                     -----BEGIN PRIVATE KEY-----\\nSomeRandomText
+#                     INSTEAD OF:
+#                     -----BEGIN PRIVATE KEY-----\\nSomeRandomText"""
+#         fd, path = tempfile.mkstemp()
+#         try:
+#             with os.fdopen(fd, 'w') as tmp:
+#                 tmp.write(jsonfile)
+#             credentials = service_account.Credentials.from_service_account_file(path)
+#             storage_client = storage.Client(credentials=credentials)
+#             bucket = storage_client.get_bucket("your-bucket")
+#         finally:
+#             os.remove(path)
 
 
 class Users(APIView):
