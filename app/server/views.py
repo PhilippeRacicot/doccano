@@ -10,7 +10,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 
 from api.permissions import ProjectAdminMixin
 from api.models import Project, RoleMapping
-from app import settings
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 

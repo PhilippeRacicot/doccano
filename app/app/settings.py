@@ -36,6 +36,8 @@ DEBUG = env.bool('DEBUG', True)
 # True if you want to allow users to be able to create an account
 ALLOW_SIGNUP = env.bool('ALLOW_SIGNUP', True)
 
+MAIN_BUCKET = env('MAIN_BUCKET', "prod_cap_lake_sedo_sandbox_workspace_gen06846")
+
 # ALLOWED_HOSTS = []
 
 
@@ -63,9 +65,9 @@ INSTALLED_APPS = [
 ]
 
 ##
-CLOUD_BROWSER_APACHE_LIBCLOUD_PROVIDER = env('CLOUD_BROWSER_LIBCLOUD_PROVIDER', "google_storage")
-CLOUD_BROWSER_APACHE_LIBCLOUD_ACCOUNT = env('CLOUD_BROWSER_LIBCLOUD_ACCOUNT', "361299340158-ekktltf7fgdnukbnd4suij1j5p8715u0.apps.googleusercontent.com")
-CLOUD_BROWSER_APACHE_LIBCLOUD_SECRET_KEY = env('CLOUD_BROWSER_LIBCLOUD_KEY', "9oKRRs3Xzj7Odf5hT85AH34J")
+CLOUD_BROWSER_APACHE_LIBCLOUD_PROVIDER = env('CLOUD_BROWSER_LIBCLOUD_PROVIDER', None)
+CLOUD_BROWSER_APACHE_LIBCLOUD_ACCOUNT = env('CLOUD_BROWSER_LIBCLOUD_ACCOUNT', None)
+CLOUD_BROWSER_APACHE_LIBCLOUD_SECRET_KEY = env('CLOUD_BROWSER_LIBCLOUD_KEY', False)
 if CLOUD_BROWSER_APACHE_LIBCLOUD_PROVIDER:
     CLOUD_BROWSER_DATASTORE = 'ApacheLibcloud'
     CLOUD_BROWSER_OBJECT_REDIRECT_URL = '/v1/cloud-upload'
@@ -192,12 +194,26 @@ ROLE_ANNOTATION_APPROVER = env('ROLE_ANNOTATION_APPROVER', 'annotation_approver'
 # Database
 # https://docs.djangoproject.com/en/2.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': path.join(BASE_DIR, 'db.sqlite3'),
+ENV = env('ENV', 'LOCAL')
+
+if ENV == 'LOCAL':
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': path.join(BASE_DIR, 'db.sqlite3'),
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': 'postgres',
+            'USER': 'postgres',
+            'PASSWORD': 'postgres',
+            'HOST': 'db',
+            'PORT': 5432,
+        }
+    }
 
 # Password validation
 # https://docs.djangoproject.com/en/2.0/ref/settings/#auth-password-validators

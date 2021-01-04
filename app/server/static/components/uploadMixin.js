@@ -17,10 +17,10 @@ export default {
     file_name: '',
     messages: [],
     format: 'json',
-    bucket: '',
     isLoading: false,
     isCloudUploadActive: false,
     canUploadFromCloud: false,
+    currentFiles: [],
   }),
 
   mounted() {
@@ -30,6 +30,10 @@ export default {
   created() {
     defaultHttpClient.get('/v1/features').then((response) => {
       this.canUploadFromCloud = response.data.cloud_upload;
+    });
+    HTTP.get('docs/download').then((response) => {
+      console.log(response.data);
+      this.currentFiles = response.data.blobs;
     });
   },
 
@@ -44,9 +48,9 @@ export default {
 
     cloudUploadUrl() {
       return '/cloud-storage'
-        + `?project_id=${this.projectId}`
-        + `&upload_format=${this.format}`
-        + `&next=${encodeURIComponent('about:blank')}`;
+                + `?project_id=${this.projectId}`
+                + `&upload_format=${this.format}`
+                + `&next=${encodeURIComponent('about:blank')}`;
     },
   },
 
@@ -54,7 +58,6 @@ export default {
     uploadFromGCP() {
       const formData = new FormData();
       formData.append('file', this.file_name);
-      formData.append('bucket', this.bucket);
       formData.append('format', this.format);
 
       HTTP.post('docs/upload',
@@ -78,7 +81,6 @@ export default {
     downloadToGCP() {
       const formData = new FormData();
       formData.append('file', this.file_name);
-      formData.append('bucket', this.bucket);
       formData.append('format', this.format);
 
       HTTP.post('docs/download',

@@ -1,5 +1,4 @@
 import collections
-import pathlib
 import os, tempfile
 import json
 from django.conf import settings
@@ -10,9 +9,6 @@ from django.shortcuts import get_object_or_404, redirect
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Count, F, Q
 from google.cloud import storage
-from google.oauth2 import service_account
-from libcloud.base import DriverType, get_driver
-from libcloud.storage.types import ContainerDoesNotExistError, ObjectDoesNotExistError
 from rest_framework import generics, filters, status
 from rest_framework.exceptions import ParseError, ValidationError
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
@@ -33,6 +29,7 @@ from .utils import JSONPainter, CSVPainter
 
 IsInProjectReadOnlyOrAdmin = (IsAnnotatorAndReadOnly | IsAnnotationApproverAndReadOnly | IsProjectAdmin)
 IsInProjectOrAdmin = (IsAnnotator | IsAnnotationApprover | IsProjectAdmin)
+
 
 class Health(APIView):
     permission_classes = (IsAuthenticatedOrReadOnly,)
@@ -273,7 +270,7 @@ class GCPUploadAPI(APIView):
 
         _, path = tempfile.mkstemp()
         storage_client = storage.Client()
-        bucket = storage_client.get_bucket(bucket_name)
+        bucket = storage_client.get_bucket(settings.MAIN_BUCKET)
         blob = bucket.blob(file_name)
         # throw exception when file is not present
         blob.download_to_filename(path)
@@ -371,7 +368,6 @@ class GCPDownloaderAPI(APIView):
 
     def post(self, request, *args, **kwargs):
         try:
-            bucket_name = request.data['bucket']
             file_name = request.data['file']
             format = request.data['format']
         except KeyError as ex:
@@ -396,7 +392,7 @@ class GCPDownloaderAPI(APIView):
             tmp.write(line_data.decode() + "\n")
 
         storage_client = storage.Client()
-        bucket = storage_client.get_bucket(bucket_name)
+        bucket = storage_client.get_bucket(settings.MAIN_BUCKET)
         try:
             bucket.delete_blob(file_name)
         except:
@@ -408,6 +404,13 @@ class GCPDownloaderAPI(APIView):
         tmp.close()
 
         return Response('Uploaded {files} to "{bucketName}" bucket.')
+
+    def get(self, request, *args, **kwargs):
+        storage_client = storage.Client()
+        # all_blobs = [el.name for el in storage_client.list_blobs(settings.MAIN_BUCKET)]
+        all_blobs = {"blobs" : ['text1.txt', 'text2.txt', 'text3.txt']}
+
+        return Response(all_blobs, content_type="application/json")
 
     def select_painter(self, format):
         if format == 'csv':
@@ -445,27 +448,6 @@ class TextDownloadAPI(APIView):
             return JSONPainter()
         else:
             raise ValidationError('format {} is invalid.'.format(format))
-
-
-# class CloudDownloadAPIGCP(APIView):
-#     permission_classes = TextDownloadAPI.permission_classes
-#
-#     def download_to_gcp(self):
-#         jsonfile = u"""<HERE GOES THE CONTENT OF YOUR KEY JSON FILE.
-#                     CONSIDER THAT THERE ARE BACKSLASHES WITHIN THE PRIVATE KEY
-#                     THEREFORE USE AN EXTRA BACKSLASH. FOR INSTANCE:
-#                     -----BEGIN PRIVATE KEY-----\\nSomeRandomText
-#                     INSTEAD OF:
-#                     -----BEGIN PRIVATE KEY-----\\nSomeRandomText"""
-#         fd, path = tempfile.mkstemp()
-#         try:
-#             with os.fdopen(fd, 'w') as tmp:
-#                 tmp.write(jsonfile)
-#             credentials = service_account.Credentials.from_service_account_file(path)
-#             storage_client = storage.Client(credentials=credentials)
-#             bucket = storage_client.get_bucket("your-bucket")
-#         finally:
-#             os.remove(path)
 
 
 class Users(APIView):
