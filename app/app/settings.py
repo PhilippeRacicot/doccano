@@ -10,18 +10,21 @@ https://docs.djangoproject.com/en/2.0/ref/settings/
 Any setting that is configured via an environment variable may
 also be set in a `.env` file in the project base directory.
 """
+import sys
 from os import path
-
+import pathlib
 import django_heroku
 import dj_database_url
 from environs import Env
 from furl import furl
 
 # Build paths inside the project like this: path.join(BASE_DIR, ...)
-BASE_DIR = path.dirname(path.dirname(path.abspath(__file__)))
+BASE_DIR = pathlib.Path.cwd()
+
+sys.path.append(pathlib.Path.cwd().as_posix())
 
 env = Env()
-env.read_env(path.join(BASE_DIR, '.env'), recurse=False)
+env.read_env(BASE_DIR.joinpath(BASE_DIR, '.env').as_posix(), recurse=False)
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/2.0/howto/deployment/checklist/
@@ -83,7 +86,6 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'social_django.middleware.SocialAuthExceptionMiddleware',
-    'applicationinsights.django.ApplicationInsightsMiddleware',
     'corsheaders.middleware.CorsMiddleware',
 ]
 
@@ -92,7 +94,8 @@ ROOT_URLCONF = 'app.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [path.join(BASE_DIR, 'server/templates'), path.join(BASE_DIR, 'authentification/templates')],
+        'DIRS': [BASE_DIR.joinpath('server/templates').as_posix(),
+                 BASE_DIR.joinpath('authentification/templates').as_posix()],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -115,13 +118,13 @@ TEMPLATES = [
 # https://docs.djangoproject.com/en/2.0/howto/static-files/
 
 STATIC_URL = '/static/'
-STATIC_ROOT = path.join(BASE_DIR, 'staticfiles')
+STATIC_ROOT = BASE_DIR.joinpath('staticfiles').as_posix()
 
 STATICFILES_DIRS = [
     static_path
     for static_path in (
-        path.join(BASE_DIR, 'server', 'static', 'assets'),
-        path.join(BASE_DIR, 'server', 'static', 'static'),
+        BASE_DIR.joinpath('server', 'static', 'assets').as_posix(),
+        BASE_DIR.joinpath('server', 'static', 'static').as_posix(),
     )
     if path.isdir(static_path)
 ]
@@ -132,7 +135,7 @@ WEBPACK_LOADER = {
     'DEFAULT': {
         'CACHE': not DEBUG,
         'BUNDLE_DIR_NAME': 'bundle/',
-        'STATS_FILE': path.join(BASE_DIR, 'server', 'static', 'webpack-stats.json'),
+        'STATS_FILE': BASE_DIR.joinpath('server', 'static', 'webpack-stats.json').as_posix(),
         'POLL_INTERVAL': 0.1,
         'TIMEOUT': None,
         'IGNORE': [r'.*\.hot-update.js', r'.+\.map']
@@ -200,7 +203,7 @@ if ENV == 'LOCAL':
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': path.join(BASE_DIR, 'db.sqlite3'),
+            'NAME': BASE_DIR.joinpath('db.sqlite3').as_posix(),
         }
     }
 else:
@@ -269,7 +272,7 @@ USE_L10N = True
 USE_TZ = True
 
 TEST_RUNNER = 'xmlrunner.extra.djangotestrunner.XMLTestRunner'
-TEST_OUTPUT_DIR = path.join(BASE_DIR, 'junitxml')
+TEST_OUTPUT_DIR = BASE_DIR.joinpath('junitxml').as_posix()
 
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/projects/'

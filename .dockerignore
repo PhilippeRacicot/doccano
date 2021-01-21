@@ -1,6 +1,6 @@
 **/bundle/
-**/node_modules/
-**/webpack-stats.json
+**/node_modules/**
+app/server/migrations/webpack-stats.json
 
 **/*.sqlite3
 **/.env

@@ -19,5 +19,8 @@ if [[ -n "${ADMIN_USERNAME}" ]] && [[ -n "${ADMIN_PASSWORD}" ]] && [[ -n "${ADMI
   || true
 fi
 
+echo "Starting UI"
+pm2 --name DjangoUI start npm -- start --prefix server/static
+
 echo "Starting django"
-gunicorn --bind 0.0.0.0:8000 app.wsgi --timeout 300
+gunicorn --bind 0.0.0.0:8000 app.wsgi:application --timeout 300
