@@ -10,7 +10,6 @@ ENV PYTHONUNBUFFERED 1
 COPY ./app/ /src/
 COPY ./Pipfile* /src/
 COPY ./tools/ /src/tools/
-ENV ENV=PROD
 ENV DJANGO_SETTINGS_MODULE=app.settings
 ENV PYTHONPATH=/src/
 

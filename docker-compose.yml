@@ -9,6 +9,9 @@ services:
       - POSTGRES_PASSWORD=postgres
   web:
     environment:
+      - MAIN_BUCKET=""
+      - GOOGLE_APPLICATION_CREDENTIALS=""
+      - ENV=PROD
       - ADMIN_USERNAME=admin
       - ADMIN_PASSWORD=admin
       - ADMIN_EMAIL=admin@admin.com
